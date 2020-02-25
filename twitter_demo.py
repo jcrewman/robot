@@ -16,6 +16,9 @@ $ source venv/bin/activate
 $ pip install python-twitter
 3. obtain API keys from twitter
 4. fill them in in the script below
+
+To re-run the virtual environment, do step 2 above
+
 '''
 
 import time
@@ -23,6 +26,11 @@ import twitter #for docs, see https://python-twitter.readthedocs.io/en/latest/tw
 import os
 import tweepy
 
+# global variables
+api = tweepy.API()
+lastcodes = {}
+
+# used only if will use web app
 class Session(object):
     def __init__(self):
     	self.dict = {}
@@ -40,6 +48,7 @@ class Session(object):
     	del self.dict[key]
 
 def twitter_authenticate():
+    global api
     
     # authenticate with tweepy -> http://docs.tweepy.org/en/latest/auth_tutorial.html
     consumer_key = os.environ.get('TW_CONSUMER_KEY')
@@ -61,19 +70,16 @@ def twitter_authenticate():
     except tweepy.TweepError:
         print('Error! Failed to get access token.')
 
-    # should keep this: they never expire
+    # keep these in fiile as they never expire
     access_token = auth.access_token
-    access_secret = auth.access_token_secret
+    access_secret = auth.access_token_secret    
+    with open("dat.txt", "w") as text_file:
+        print(f"access_token: {access_token}\naccess_secret: {access_secret}", file=text_file)
     
     api = tweepy.API(auth)
+    print(api)
     
-    # get 20 most recent tweets
-    public_tweets = api.home_timeline()
-    for tweet in public_tweets:
-        print(tweet.text)    
-    # api.update_status('tweepy + oauth!')
-
-    '''    
+    '''
     # if using web app, need callback  -> http://docs.tweepy.org/en/latest/auth_tutorial.html
     session = Session()
     session.set('request_token', auth.request_token['oauth_token'])
@@ -90,7 +96,57 @@ def twitter_authenticate():
     except tweepy.TweepError:
         print 'Error! Failed to get access token.'
     '''
+
+# read user's stored keys and re-build OAuthHandler
+def twitter_buildOAuthHandler():
+    global api
+    global lastcodes
     
+    filename = 'dat.txt'
+    with open(filename) as f:
+        content = f.readlines()
+        # you may also want to remove whitespace characters like `\n` at the end of each line
+        content = [x.strip() for x in content]
+    for line in content:
+        k, v = line.strip().split(': ')
+        lastcodes[k.strip()] = v.strip()
+    
+    key = lastcodes['access_token']
+    secret = lastcodes['access_secret']
+    
+    consumer_key = os.environ.get('TW_CONSUMER_KEY')
+    consumer_secret = os.environ.get('TW_CONSUMER_SECRET')
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(key, secret)
+    api = tweepy.API(auth)
+
+
+def read_feed():
+    global api
+    public_tweets = api.home_timeline()
+    print(api)
+    for tweet in public_tweets:
+        print(tweet.text)
+
+# next: make a function that grabs the 20 recent feed items (see above) and display them, maybe process them to summarize them
+
+twitter_buildOAuthHandler()
+
+#twitter_authenticate()
+read_feed()
+
+# get 20 most recent tweets
+# this doesn't work yet since need to create a global variable that carries between functions, which is the api
+
+
+# api.update_status('tweepy + oauth!')
+
+
+# could do something like read file first, then check if the auth works, then if it doesn't, then call authenticate
+def main(): 
+
+
+
     ''' 
     # Example of using twitter API (base)
     # connect to api with apikeys
@@ -148,7 +204,3 @@ def twitter_authenticate():
       print("Adding ", friend_id)
       result = api.CreateListsMember(list_id=mylist.id,user_id=friend_id)
     '''
-
-
-twitter_authenticate()
-
