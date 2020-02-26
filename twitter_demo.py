@@ -26,6 +26,8 @@ import twitter #for docs, see https://python-twitter.readthedocs.io/en/latest/tw
 import os
 import tweepy
 
+from gtts import gTTS
+
 # global variables
 api = tweepy.API()
 lastcodes = {}
@@ -125,8 +127,18 @@ def read_feed():
     global api
     public_tweets = api.home_timeline()
     print(api)
-    for tweet in public_tweets:
-        print(tweet.text)
+#    for tweet in public_tweets:
+#        print(tweet.text)
+    
+    # saytweet = public_tweets[0].text
+    saytweet = next(iter(public_tweets), None).text
+    print(saytweet)
+    # print one tweet
+    
+    # note: instead use ttsWatson if want to use curl to directly fetch from Watson API (i.e., cloud computing)
+    tts = gTTS(saytweet, lang='nl', slow=True)
+    # language codes: https://gist.github.com/traysr/2001377
+    tts.save('bijvorbeeld.mp3')
 
 # next: make a function that grabs the 20 recent feed items (see above) and display them, maybe process them to summarize them
 
