@@ -54,6 +54,7 @@ class Session(object):
 
 def twitter_authenticate():
     global api
+    got_token = True
     
     # authenticate with tweepy -> http://docs.tweepy.org/en/latest/auth_tutorial.html
     consumer_key = os.environ.get('TW_CONSUMER_KEY')
@@ -64,6 +65,7 @@ def twitter_authenticate():
         redirect_url = auth.get_authorization_url()
     except tweepy.TweepError:
         print('Error! Failed to get request token.')
+        got_token = False
     
     # manually go to the url 
     print(redirect_url)
@@ -74,12 +76,14 @@ def twitter_authenticate():
         auth.get_access_token(verifier)
     except tweepy.TweepError:
         print('Error! Failed to get access token.')
+        got_token = False
 
-    # keep these in fiile as they never expire
-    access_token = auth.access_token
-    access_secret = auth.access_token_secret    
-    with open("dat.txt", "w") as text_file:
-        print(f"access_token: {access_token}\naccess_secret: {access_secret}", file=text_file)
+    # keep these in file as they never expire
+    if got_token == True:
+        access_token = auth.access_token
+        access_secret = auth.access_token_secret
+        with open("dat.txt", "w") as text_file:
+            print(f"access_token: {access_token}\naccess_secret: {access_secret}", file=text_file)
     
     # construct the API instance
     api = tweepy.API(auth)
@@ -108,6 +112,8 @@ def twitter_buildOAuthHandler():
     global api
     global lastcodes
     
+    '''
+    # handled in main()
     filename = 'dat.txt'
     with open(filename) as f:
         content = f.readlines()
@@ -116,6 +122,7 @@ def twitter_buildOAuthHandler():
     for line in content:
         k, v = line.strip().split(': ')
         lastcodes[k.strip()] = v.strip()
+    '''
     
     key = lastcodes['access_token']
     secret = lastcodes['access_secret']
@@ -177,7 +184,7 @@ def read_feed():
     # can use pagination -> http://docs.tweepy.org/en/latest/cursor_tutorial.html
     # cursor method can raise Rate Limits
     tweepy.Cursor(api.user_timeline, id = "twitter", tweet_mode = "extended")
-    for status in limit_handled(tweepy.Cursor(api.home_timeline).items(22)):
+    for status in tweepy.Cursor(api.home_timeline).items(22):  # adding limit_handled doesn't seem to work here
          # process status here
          print(status.text)
     # '''
@@ -194,16 +201,35 @@ def update_status():
     # api.update_status('tweepy + oauth!')
 
 def main(): 
+    global lastcodes
+    gotlastcodes = False
 
-    twitter_buildOAuthHandler()
-    #twitter_authenticate()
+    # could try to read file first, else authenticate; then try to build handler, else authenticate
+    try:
+        filename = 'dat.txt'
+        with open(filename) as f:
+            content = f.readlines()
+            # you may also want to remove whitespace characters like `\n` at the end of each line
+            content = [x.strip() for x in content]
+        for line in content:
+            k, v = line.strip().split(': ')
+            lastcodes[k.strip()] = v.strip()
+            # https://stackoverflow.com/questions/4803999/how-to-convert-a-file-into-a-dictionary
+        print(lastcodes)
+        gotlastcodes = True
+    except:
+        twitter_authenticate()
+        
+    if gotlastcodes == True:
+        try:
+            twitter_buildOAuthHandler()
+        except:
+            twitter_authenticate()
     
-    #asr()
+    # asr()
     
     read_feed()
-    
-    # could try to read file first, else authenticate; then try to build handler, else authenticate
-    
+        
     ''' 
     # Example of using twitter API (base)
     # connect to api with apikeys
