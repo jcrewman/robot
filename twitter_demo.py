@@ -25,12 +25,15 @@ import time
 import twitter #for docs, see https://python-twitter.readthedocs.io/en/latest/twitter.html
 import os
 import tweepy
+import re
+import speech_recognition as sr
 
 from gtts import gTTS
 
 # global variables
 api = tweepy.API()
 lastcodes = {}
+name = ''
 
 # used only if will use web app
 class Session(object):
@@ -78,6 +81,7 @@ def twitter_authenticate():
     with open("dat.txt", "w") as text_file:
         print(f"access_token: {access_token}\naccess_secret: {access_secret}", file=text_file)
     
+    # construct the API instance
     api = tweepy.API(auth)
     print(api)
     
@@ -122,43 +126,84 @@ def twitter_buildOAuthHandler():
     auth.set_access_token(key, secret)
     api = tweepy.API(auth)
 
+# In this example, the handler is time.sleep(15 * 60),
+# but you can of course handle it in any way you want.
+
+def limit_handled(cursor):
+    while True:
+        try:
+            yield cursor.next()
+        except tweepy.RateLimitError:
+            time.sleep(15 * 60)
+            
+def asr():
+    global name
+    
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Who you want to get news about? Speak name:")
+        audio = r.listen(source) # listen to the source
+        try:
+            text = r.recognize_google(audio) # use recognizer to convert our audio into text part
+            print("You said : {}".format(text))
+            name = text
+        except:
+            print("Sorry could not recognize your voice") # In case of voice not recognized clearly
 
 def read_feed():
     global api
-    public_tweets = api.home_timeline()
-    print(api)
-#    for tweet in public_tweets:
-#        print(tweet.text)
+    public_tweets = api.home_timeline(tweet_mode = "extended")
     
-    # saytweet = public_tweets[0].text
-    saytweet = next(iter(public_tweets), None).text
+    # voice one tweet with username
+    user = next(iter(public_tweets), None).user
+    author = next(iter(public_tweets), None).author # same as user
+    text = next(iter(public_tweets), None).full_text
+    #user = public_tweets[0].user
+    #text = public_tweets[0].full_text
+    text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+    text = re.sub(r'\w+…', '', text)
+    # remove links -> http://www.urlregex.com and truncated text (if it's a retweet, the last words/characters may get truncated)
+    saytweet = user.name + ' says ' + text
     print(saytweet)
-    # print one tweet
+    # saytweet = public_tweets[0].text also works
     
     # note: instead use ttsWatson if want to use curl to directly fetch from Watson API (i.e., cloud computing)
     tts = gTTS(saytweet, lang='nl', slow=True)
     # language codes: https://gist.github.com/traysr/2001377
-    tts.save('bijvorbeeld.mp3')
+    tts.save('bijvorbeeld.mp3')    
+    
+    # '''
+    # to process multiple tweets from authenticated user's timeline
+    # can use pagination -> http://docs.tweepy.org/en/latest/cursor_tutorial.html
+    # cursor method can raise Rate Limits
+    tweepy.Cursor(api.user_timeline, id = "twitter", tweet_mode = "extended")
+    for status in limit_handled(tweepy.Cursor(api.home_timeline).items(22)):
+         # process status here
+         print(status.text)
+    # '''
+    # or do below without pagination
+    #    for tweet in public_tweets:
+    #        print(tweet.text)
+         
+    # to pick a specific user -> http://docs.tweepy.org/en/latest/cursor_tutorial.html
+    
 
-# next: make a function that grabs the 20 recent feed items (see above) and display them, maybe process them to summarize them
+def update_status():
+    global api
+    
+    # api.update_status('tweepy + oauth!')
 
-twitter_buildOAuthHandler()
-
-#twitter_authenticate()
-read_feed()
-
-# get 20 most recent tweets
-# this doesn't work yet since need to create a global variable that carries between functions, which is the api
-
-
-# api.update_status('tweepy + oauth!')
-
-
-# could do something like read file first, then check if the auth works, then if it doesn't, then call authenticate
 def main(): 
 
-
-
+    twitter_buildOAuthHandler()
+    #twitter_authenticate()
+    
+    #asr()
+    
+    read_feed()
+    
+    # could try to read file first, else authenticate; then try to build handler, else authenticate
+    
     ''' 
     # Example of using twitter API (base)
     # connect to api with apikeys
@@ -216,3 +261,5 @@ def main():
       print("Adding ", friend_id)
       result = api.CreateListsMember(list_id=mylist.id,user_id=friend_id)
     '''
+
+main()
