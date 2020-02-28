@@ -5,6 +5,7 @@ USE AT YOUR OWN PERIL <3
 fill in your API keys before running the script
 written in Python3 by Judith van Stegeren, @jd7h
 modified by Jamy Li, @jamyjli
+audio.wav produced by M Meijer, A Sadananda Bhat, M. Dokter en C. Boersma
 '''
 
 '''
@@ -46,7 +47,8 @@ from pydub.playback import play
 # global variables
 api = tweepy.API()
 lastcodes = {}
-name = ''
+command = ''
+target = ''
 
 # used only if will use web app
 class Session(object):
@@ -158,45 +160,98 @@ def limit_handled(cursor):
             time.sleep(15 * 60)
             
 def asr():
-    global name
+    global command
+    global target
+    global api
     
     # see 'Speech Recognition Using Python | Edureka' https://www.youtube.com/watch?v=sHeJgKBaiAI
     # and https://pythonprogramminglanguage.com/speech-recognition/
     
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        print("Zeg maar een bevel en een voorwerp (bv. 'nieuws Floortje'):")
-        audio = r.listen(source) # listen to the source
-        try:
-            text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert our audio into text part
-            print("U zeg : {}".format(text))
-            tts = gTTS(text, lang='nl', slow=False)
-            name = text
-        except:
-            print("Sorry could not recognize your voice") # In case of voice not recognized clearly
+        text = ''
+        while True:
+            print("Zeg maar een bevel en een voorwerp (bv. 'nieuws Floortje'):")
+            audio = r.listen(source) # listen to the source
+            try:
+                text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert our audio into text part
+                print("U zeg : {}".format(text))
+                say(text)
+            except sr.UnknownValueError:
+                print("Could not understand audio")
+            except sr.RequestError as e:
+                print("Could not request results; {0}".format(e))
+            if text != '':
+                break
+            else:
+                say('Wat zeg u?')
+        
+        if 'lezen' in text:
+            command = 'lezen'
+            
+            timeline_tweets = api.home_timeline(tweet_mode = "extended")
+            # voice one tweet with username
+            username = next(iter(timeline_tweets), None).user.name
+            author = next(iter(tiimelinie_tweets), None).author # same as user
+            #user = public_tweets[0].user
+            #text = public_tweets[0].full_text
+            text = next(iter(timeline_tweets), None).full_text
 
-def read_feed():
-    global api
-    public_tweets = api.home_timeline(tweet_mode = "extended")
-    
-    # voice one tweet with username
-    user = next(iter(public_tweets), None).user
-    author = next(iter(public_tweets), None).author # same as user
-    text = next(iter(public_tweets), None).full_text
-    #user = public_tweets[0].user
-    #text = public_tweets[0].full_text
+            say(readable_feed(text, username))
+        
+        elif 'nieuws' in text:
+            command = 'nieuws'
+            
+            r2 = sr.Recognizer()
+            with sr.Microphone() as source:
+                print('nieuws over welke @naam?:')
+                audio = r2.listen(source)
+                try:
+                    get = r2.recognize_google(audio, language="nl-NL")
+                    print("U zeg : {}".format(get))
+                    say(get)
+                    target = get.replace(" ", "")
+                    public_tweets = api.user_timeline(screen_name = target, count = 3, tweet_mode = "extended")
+                    # id is numeric, user_id is @handle, screen name is profile name
+                    text = next(iter(public_tweets), None).full_text
+                    # print('@' + target + ' \'s nieuwste tweet is: ' + text)
+                    say(readable_feed(text, username = target))
+                except sr.UnknownValueError:
+                    print("Could not understand audio")
+                except sr.RequestError as e:
+                    print("Could not request results; {0}".format(e))
+                except tweepy.TweepError as e:
+                    print("tweepy had an error; {0}".format(e))
+                    
+        elif 'doei' in text:
+            command = 'doei'
+            
+            say('fijne dag')
+            
+        else:
+            command = 'unrecognized'
+            
+            print('wat zeg U?')
+        
+        return command
+
+def readable_feed(text, username = None):
     text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
     text = re.sub(r'\w+…', '', text)
     # remove links -> http://www.urlregex.com and truncated text (if it's a retweet, the last words/characters may get truncated)
-    saytweet = user.name + ' says ' + text
-    print(saytweet)
+    if username == None:
+        saytweet = text
+    else:
+        saytweet = username + ' zegt ' + text
+    print('@' + saytweet)
+    return saytweet
     # saytweet = public_tweets[0].text also works
-    
+
+def say(text):    
     # note: instead use ttsWatson if want to use curl to directly fetch from Watson API (i.e., cloud computing)
-    tts = gTTS(saytweet, lang='nl', slow=False)
+    tts = gTTS(text, lang='nl', slow=False)
     # language codes: https://gist.github.com/traysr/2001377
-    tts.save('bijvorbeeld.mp3')    
-    
+    tts.save('bijvorbeeld.mp3')
     
     # play sound
     song = AudioSegment.from_wav('audio.wav')
@@ -204,7 +259,6 @@ def read_feed():
     song = AudioSegment.from_mp3('bijvorbeeld.mp3')
     play(song)
     
-
 def process_timeliine():
     # '''
     # to process multiple tweets from authenticated user's timeline
@@ -222,13 +276,13 @@ def process_timeliine():
     # to pick a specific user -> http://docs.tweepy.org/en/latest/cursor_tutorial.html
     
 
-def update_status():
+def update_status(msg):
     global api
-    
-    # api.update_status('tweepy + oauth!')
+    api.update_status(msg)
 
 def main(): 
     global lastcodes
+    global command
     gotlastcodes = False
 
     # could try to read file first, else authenticate; then try to build handler, else authenticate
@@ -253,10 +307,11 @@ def main():
         except:
             twitter_authenticate()
     
-    asr()
+    while True:
+        if asr() == 'doei':
+            break
     
-    read_feed()
-        
+    
     ''' 
     # Example of using twitter API (base)
     # connect to api with apikeys
