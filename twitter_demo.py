@@ -172,6 +172,7 @@ def asr():
         text = ''
         while True:
             print("Zeg maar een bevel en een voorwerp (bv. 'nieuws Floortje'):")
+            say('Zeg maar een bevel')
             audio = r.listen(source) # listen to the source
             try:
                 text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert our audio into text part
@@ -181,6 +182,7 @@ def asr():
                 print("Could not understand audio")
             except sr.RequestError as e:
                 print("Could not request results; {0}".format(e))
+            
             if text != '':
                 break
             else:
@@ -192,7 +194,7 @@ def asr():
             timeline_tweets = api.home_timeline(tweet_mode = "extended")
             # voice one tweet with username
             username = next(iter(timeline_tweets), None).user.name
-            author = next(iter(tiimelinie_tweets), None).author # same as user
+            author = next(iter(timeline_tweets), None).author # same as user
             #user = public_tweets[0].user
             #text = public_tweets[0].full_text
             text = next(iter(timeline_tweets), None).full_text
@@ -204,25 +206,36 @@ def asr():
             
             r2 = sr.Recognizer()
             with sr.Microphone() as source:
-                print('nieuws over welke @naam?:')
-                audio = r2.listen(source)
-                try:
-                    get = r2.recognize_google(audio, language="nl-NL")
-                    print("U zeg : {}".format(get))
-                    say(get)
-                    target = get.replace(" ", "")
-                    public_tweets = api.user_timeline(screen_name = target, count = 3, tweet_mode = "extended")
-                    # id is numeric, user_id is @handle, screen name is profile name
-                    text = next(iter(public_tweets), None).full_text
-                    # print('@' + target + ' \'s nieuwste tweet is: ' + text)
-                    say(readable_feed(text, username = target))
-                except sr.UnknownValueError:
-                    print("Could not understand audio")
-                except sr.RequestError as e:
-                    print("Could not request results; {0}".format(e))
-                except tweepy.TweepError as e:
-                    print("tweepy had an error; {0}".format(e))
+                err = ''
+                while True:
+                    print('nieuws over welke @naam?:')
+                    say('welke @naam?')
+                    audio = r2.listen(source)
+                    try:
+                        get = r2.recognize_google(audio, language="nl-NL")
+                        print("U zeg : {}".format(get))
+                        say(get)
+                        target = get.replace(" ", "")
+                        public_tweets = api.user_timeline(screen_name = target, count = 3, tweet_mode = "extended")
+                        # id is numeric, user_id is @handle, screen name is profile name
+                        text = next(iter(public_tweets), None).full_text
+                        # print('@' + target + ' \'s nieuwste tweet is: ' + text)
+                        say(readable_feed(text, username = target))
+                    except sr.UnknownValueError:
+                        print("Could not understand audio")
+                        err = 'ik niet verstaa'
+                    except sr.RequestError as e:
+                        print("Could not request results; {0}".format(e))
+                        err = 'kan niet resultants krijgen'
+                    except tweepy.TweepError as e:
+                        print("tweepy had an error; {0}".format(e))
+                        err = 'voor dat naam, ' + format(e)
                     
+                    if err == '':
+                        break
+                    else:
+                        say(err)
+                        
         elif 'doei' in text:
             command = 'doei'
             
@@ -242,6 +255,7 @@ def readable_feed(text, username = None):
     if username == None:
         saytweet = text
     else:
+        username = username.replace('_', '')
         saytweet = username + ' zegt ' + text
     print('@' + saytweet)
     return saytweet
@@ -259,7 +273,7 @@ def say(text):
     song = AudioSegment.from_mp3('bijvorbeeld.mp3')
     play(song)
     
-def process_timeliine():
+def process_timeline():
     # '''
     # to process multiple tweets from authenticated user's timeline
     # can use pagination -> http://docs.tweepy.org/en/latest/cursor_tutorial.html
