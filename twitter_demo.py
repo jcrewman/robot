@@ -13,11 +13,21 @@ before running the script, do this:
 $ python -m venv venv
 $ source venv/bin/activate
 2. install the dependencies
-$ pip install python-twitter
+(venv)$ pip install python-twitter
 3. obtain API keys from twitter
 4. fill them in in the script below
+5. To re-run the virtual environment, do step 1b above
+6. Install ffmpeg program outside venv, it may install lots
+$ brew install ffmpeg
+7. Install portaudio program outside venv
+$ brew install portaudio
+7a. If there's a Permission denied @apply2files, check https://github.com/Homebrew/homebrew-core/issues/45009
+$ touch /usr/local/lib/node_modules/node-red/node_modules/@node-red/nodes/.DS_Store
+8. Install PyAudio python package required for speech_recognition
+(venv)$ pip install PyAudio
+8. test speech recognition within venv
+(venv)$ python3.8 -m speech_recognition
 
-To re-run the virtual environment, do step 2 above
 
 '''
 
@@ -26,9 +36,12 @@ import twitter #for docs, see https://python-twitter.readthedocs.io/en/latest/tw
 import os
 import tweepy
 import re
+
 import speech_recognition as sr
 
 from gtts import gTTS
+from pydub import AudioSegment
+from pydub.playback import play
 
 # global variables
 api = tweepy.API()
@@ -132,6 +145,7 @@ def twitter_buildOAuthHandler():
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
     auth.set_access_token(key, secret)
     api = tweepy.API(auth)
+    # for some reason, this call doesn't throw an error if the key and secret are set to 'None'
 
 # In this example, the handler is time.sleep(15 * 60),
 # but you can of course handle it in any way you want.
@@ -146,13 +160,17 @@ def limit_handled(cursor):
 def asr():
     global name
     
+    # see 'Speech Recognition Using Python | Edureka' https://www.youtube.com/watch?v=sHeJgKBaiAI
+    # and https://pythonprogramminglanguage.com/speech-recognition/
+    
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        print("Who you want to get news about? Speak name:")
+        print("Zeg maar een bevel en een voorwerp (bv. 'nieuws Floortje'):")
         audio = r.listen(source) # listen to the source
         try:
-            text = r.recognize_google(audio) # use recognizer to convert our audio into text part
-            print("You said : {}".format(text))
+            text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert our audio into text part
+            print("U zeg : {}".format(text))
+            tts = gTTS(text, lang='nl', slow=False)
             name = text
         except:
             print("Sorry could not recognize your voice") # In case of voice not recognized clearly
@@ -175,10 +193,19 @@ def read_feed():
     # saytweet = public_tweets[0].text also works
     
     # note: instead use ttsWatson if want to use curl to directly fetch from Watson API (i.e., cloud computing)
-    tts = gTTS(saytweet, lang='nl', slow=True)
+    tts = gTTS(saytweet, lang='nl', slow=False)
     # language codes: https://gist.github.com/traysr/2001377
     tts.save('bijvorbeeld.mp3')    
     
+    
+    # play sound
+    song = AudioSegment.from_wav('audio.wav')
+    play(song)
+    song = AudioSegment.from_mp3('bijvorbeeld.mp3')
+    play(song)
+    
+
+def process_timeliine():
     # '''
     # to process multiple tweets from authenticated user's timeline
     # can use pagination -> http://docs.tweepy.org/en/latest/cursor_tutorial.html
@@ -226,7 +253,7 @@ def main():
         except:
             twitter_authenticate()
     
-    # asr()
+    asr()
     
     read_feed()
         
