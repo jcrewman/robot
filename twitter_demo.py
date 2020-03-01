@@ -37,18 +37,22 @@ import twitter #for docs, see https://python-twitter.readthedocs.io/en/latest/tw
 import os
 import tweepy
 import re
+import sys
 
 import speech_recognition as sr
 
 from gtts import gTTS
 from pydub import AudioSegment
 from pydub.playback import play
+# from pygame import mixer
+# import mpg123
 
 # global variables
 api = tweepy.API()
 lastcodes = {}
-command = ''
-target = ''
+text = ''
+tweets = []
+sayprompts = True
 
 # used only if will use web app
 class Session(object):
@@ -159,94 +163,111 @@ def limit_handled(cursor):
         except tweepy.RateLimitError:
             time.sleep(15 * 60)
             
+# based on https://stackoverflow.com/questions/38127563/handle-an-exception-in-a-while-loop
+def got_text():
+    global text
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        audio = r.listen(source) # listen to the source
+        try:
+            text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert our audio into text part
+            return True # could try returning text instead of True
+        except sr.UnknownValueError:
+            print("Could not understand audio")
+            return False
+        except sr.RequestError as e:
+            print("Could not request results from Google; {0}".format(e))
+            return False
+        #except: #don't use this I guess
+
 def asr():
-    global command
-    global target
-    global api
-    
     # see 'Speech Recognition Using Python | Edureka' https://www.youtube.com/watch?v=sHeJgKBaiAI
     # and https://pythonprogramminglanguage.com/speech-recognition/
     
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        text = ''
-        while True:
-            print("Zeg maar een bevel en een voorwerp (bv. 'nieuws Floortje'):")
-            say('Zeg maar een bevel')
-            audio = r.listen(source) # listen to the source
-            try:
-                text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert our audio into text part
-                print("U zeg : {}".format(text))
-                say(text)
-            except sr.UnknownValueError:
-                print("Could not understand audio")
-            except sr.RequestError as e:
-                print("Could not request results; {0}".format(e))
-            
-            if text != '':
-                break
-            else:
-                say('Wat zeg u?')
-        
-        if 'lezen' in text:
+    while(True):
+        if got_text():
+            break
+        else:
+            continue
+    # text will be gotten
+
+def main_menu():
+    global api
+    global text
+    
+    # menu and submenu --> https://stackoverflow.com/questions/42015741/creating-menu-and-submenu-display
+    # could try to do it in a while loop and separate function as above
+    # while(True), if function_check_asr_text_is_valid_menu_option(): break  else: continue
+    command = ''
+    while command == '':
+        say("Zeg maar een bevel en een voorwerp", extraprint = "(bv. 'nieuws Floortje Dessing')")
+        asr()
+        print('ASR heard: ' + text)
+        # will return some text, but need to validate
+        if 'doei' in text:
+            say('fijne dag')
+            sys.exit()
+        elif 'lezen' in text:
             command = 'lezen'
-            
+            say('lezen')
+            # do something: voice latest tweet from timeline
             timeline_tweets = api.home_timeline(tweet_mode = "extended")
-            # voice one tweet with username
             username = next(iter(timeline_tweets), None).user.name
-            author = next(iter(timeline_tweets), None).author # same as user
+            text = next(iter(timeline_tweets), None).full_text
+            print(text)
+            say(readable_feed(text, username))
+            #author = next(iter(timeline_tweets), None).author # same as user
             #user = public_tweets[0].user
             #text = public_tweets[0].full_text
-            text = next(iter(timeline_tweets), None).full_text
-
-            say(readable_feed(text, username))
-        
         elif 'nieuws' in text:
             command = 'nieuws'
-            
-            r2 = sr.Recognizer()
-            with sr.Microphone() as source:
-                err = ''
-                while True:
-                    print('nieuws over welke @naam?:')
-                    say('welke @naam?')
-                    audio = r2.listen(source)
-                    try:
-                        get = r2.recognize_google(audio, language="nl-NL")
-                        print("U zeg : {}".format(get))
-                        say(get)
-                        target = get.replace(" ", "")
-                        public_tweets = api.user_timeline(screen_name = target, count = 3, tweet_mode = "extended")
-                        # id is numeric, user_id is @handle, screen name is profile name
-                        text = next(iter(public_tweets), None).full_text
-                        # print('@' + target + ' \'s nieuwste tweet is: ' + text)
-                        say(readable_feed(text, username = target))
-                    except sr.UnknownValueError:
-                        print("Could not understand audio")
-                        err = 'ik niet verstaa'
-                    except sr.RequestError as e:
-                        print("Could not request results; {0}".format(e))
-                        err = 'kan niet resultants krijgen'
-                    except tweepy.TweepError as e:
-                        print("tweepy had an error; {0}".format(e))
-                        err = 'voor dat naam, ' + format(e)
-                    
-                    if err == '':
-                        break
-                    else:
-                        say(err)
-                        
-        elif 'doei' in text:
-            command = 'doei'
-            
-            say('fijne dag')
-            
+            say('nieuws')
+            subcommand = nieuws_menu()
         else:
-            command = 'unrecognized'
-            
-            print('wat zeg U?')
-        
-        return command
+            say('ongeldige keuze!')
+    # command is gotten
+    return command
+
+def got_user_timeline(target):
+    global tweets
+    global api
+    target = target.replace(" ", "")
+    try:
+        tweets = api.user_timeline(screen_name = target, count = 1, tweet_mode = "extended")
+        if len(tweets) > 0:
+            return True
+        else:
+            # test: try 'flitsen'
+            say("geen publiek tweets voor dat naam")
+            return False
+    except tweepy.TweepError as e:
+        say("voor dat naam, {0}".format(e))
+        return False
+
+def nieuws_menu():
+    global text
+    global tweets
+    
+    # could try to process the 'leftover' string in text after nieuws is removed, so user can say news + username in one go
+    subcommand = ''
+    while subcommand == '':
+        say('nieuws over welke @naam ?')
+        asr()
+        print('ASR heard submenu input: ' + text)
+        # will return some text, but need to validate
+        if 'doei' in text:
+            return
+        elif got_user_timeline(text):
+            subcommand = 'atnaamtweet'
+            # do something: voice latest tweet from @naam
+            # id is numeric, user_id is @handle, screen name is profile name
+            tweet = next(iter(tweets), None).full_text
+            # tweet = public_tweets[0].text also works
+            # print('@' + target + ' \'s nieuwste tweet is: ' + text)
+            say(readable_feed(tweet, username = text))
+        else:
+            # got_user_timeline unsuccessful
+            pass
 
 def readable_feed(text, username = None):
     text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
@@ -256,22 +277,29 @@ def readable_feed(text, username = None):
         saytweet = text
     else:
         username = username.replace('_', '')
-        saytweet = username + ' zegt ' + text
-    print('@' + saytweet)
+        saytweet = '@' + username + ' zegt ' + text
     return saytweet
-    # saytweet = public_tweets[0].text also works
 
-def say(text):    
-    # note: instead use ttsWatson if want to use curl to directly fetch from Watson API (i.e., cloud computing)
-    tts = gTTS(text, lang='nl', slow=False)
-    # language codes: https://gist.github.com/traysr/2001377
-    tts.save('bijvorbeeld.mp3')
-    
-    # play sound
-    song = AudioSegment.from_wav('audio.wav')
-    play(song)
-    song = AudioSegment.from_mp3('bijvorbeeld.mp3')
-    play(song)
+def say(text, extraprint=''):
+    global sayprompts
+
+    print('ROBOT says: ' + text + "   " + extraprint)    
+    if sayprompts:
+        # note: instead use ttsWatson if want to use curl to directly fetch from Watson API (i.e., cloud computing)
+        tts = gTTS(text, lang='nl', slow=False)
+        # language codes: https://gist.github.com/traysr/2001377
+        tts.save('bijvorbeeld.mp3')
+
+        # alternatively, use mixer in case AudioSegment is too buggy or slow    
+        # play sound
+        # mixer.init()
+        # mixer.music.load('bijvorbeeld.mp3')
+        # mixer.music.play()
+        
+        song = AudioSegment.from_wav('audio.wav')
+        play(song)
+        song = AudioSegment.from_mp3('bijvorbeeld.mp3')
+        play(song) # sometimes this takes a long time
     
 def process_timeline():
     # '''
@@ -288,7 +316,6 @@ def process_timeline():
     #        print(tweet.text)
          
     # to pick a specific user -> http://docs.tweepy.org/en/latest/cursor_tutorial.html
-    
 
 def update_status(msg):
     global api
@@ -296,10 +323,9 @@ def update_status(msg):
 
 def main(): 
     global lastcodes
-    global command
     gotlastcodes = False
 
-    # could try to read file first, else authenticate; then try to build handler, else authenticate
+    # try to read file first, else authenticate; then try to build handler, else authenticate
     try:
         filename = 'dat.txt'
         with open(filename) as f:
@@ -310,7 +336,7 @@ def main():
             k, v = line.strip().split(': ')
             lastcodes[k.strip()] = v.strip()
             # https://stackoverflow.com/questions/4803999/how-to-convert-a-file-into-a-dictionary
-        print(lastcodes)
+        print('building OAuth from past access tokens in dat.txt')
         gotlastcodes = True
     except:
         twitter_authenticate()
@@ -320,10 +346,11 @@ def main():
             twitter_buildOAuthHandler()
         except:
             twitter_authenticate()
+    # user authetication codes good at this point
     
-    while True:
-        if asr() == 'doei':
-            break
+    # commands
+    while(True):
+        main_menu()
     
     
     ''' 
