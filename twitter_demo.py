@@ -10,6 +10,9 @@ audio.wav produced by M Meijer, A Sadananda Bhat, M. Dokter en C. Boersma
 
 '''
 before running the script, do this:
+0. environment variables to store keys (do NOT place string of any key in any file on github)
+$ nano ~/.bash_profile
+$ nano .gitignore (add dat.txt)
 1. create a virtual environment
 $ python -m venv venv
 $ source venv/bin/activate
@@ -86,9 +89,8 @@ def twitter_authenticate():
         print('Error! Failed to get request token.')
         got_token = False
     
-    # manually go to the url 
-    print(redirect_url)
-    
+    print(redirect_url)    
+    # manually go to the url, then input 8-digit code
     verifier = input('Verifier:')    
         
     try:
@@ -130,22 +132,9 @@ def twitter_authenticate():
 def twitter_buildOAuthHandler():
     global api
     global lastcodes
-    
-    '''
-    # handled in main()
-    filename = 'dat.txt'
-    with open(filename) as f:
-        content = f.readlines()
-        # you may also want to remove whitespace characters like `\n` at the end of each line
-        content = [x.strip() for x in content]
-    for line in content:
-        k, v = line.strip().split(': ')
-        lastcodes[k.strip()] = v.strip()
-    '''
-    
+        
     key = lastcodes['access_token']
     secret = lastcodes['access_secret']
-    
     consumer_key = os.environ.get('TW_CONSUMER_KEY')
     consumer_secret = os.environ.get('TW_CONSUMER_SECRET')
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -153,9 +142,9 @@ def twitter_buildOAuthHandler():
     api = tweepy.API(auth)
     # for some reason, this call doesn't throw an error if the key and secret are set to 'None'
 
+# Handle rate limit error that comes up with twitter's cursors (i.e. pages)
 # In this example, the handler is time.sleep(15 * 60),
 # but you can of course handle it in any way you want.
-
 def limit_handled(cursor):
     while True:
         try:
@@ -163,14 +152,15 @@ def limit_handled(cursor):
         except tweepy.RateLimitError:
             time.sleep(15 * 60)
             
-# based on https://stackoverflow.com/questions/38127563/handle-an-exception-in-a-while-loop
+# got_text and asr implementations based on https://stackoverflow.com/questions/38127563/handle-an-exception-in-a-while-loop
 def got_text():
     global text
     r = sr.Recognizer()
     with sr.Microphone() as source:
         audio = r.listen(source) # listen to the source
         try:
-            text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert our audio into text part
+            text = r.recognize_google(audio, language="nl-NL") # use recognizer to convert speech to text
+            #text = r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY", language="nl-NL") # key not working, maybe try the service account Key instead?
             return True # could try returning text instead of True
         except sr.UnknownValueError:
             print("Could not understand audio")
@@ -179,11 +169,10 @@ def got_text():
             print("Could not request results from Google; {0}".format(e))
             return False
         #except: #don't use this I guess
-
+        
 def asr():
     # see 'Speech Recognition Using Python | Edureka' https://www.youtube.com/watch?v=sHeJgKBaiAI
-    # and https://pythonprogramminglanguage.com/speech-recognition/
-    
+    # and https://pythonprogramminglanguage.com/speech-recognition/    
     while(True):
         if got_text():
             break
@@ -219,6 +208,7 @@ def main_menu():
             #author = next(iter(timeline_tweets), None).author # same as user
             #user = public_tweets[0].user
             #text = public_tweets[0].full_text
+            #date = tweet[0].created_at
         elif 'nieuws' in text:
             command = 'nieuws'
             say('nieuws')
@@ -234,6 +224,7 @@ def got_user_timeline(target):
     target = target.replace(" ", "")
     try:
         tweets = api.user_timeline(screen_name = target, count = 1, tweet_mode = "extended")
+        # id is numeric, user_id is @handle, screen name is profile name
         if len(tweets) > 0:
             return True
         else:
@@ -260,10 +251,9 @@ def nieuws_menu():
         elif got_user_timeline(text):
             subcommand = 'atnaamtweet'
             # do something: voice latest tweet from @naam
-            # id is numeric, user_id is @handle, screen name is profile name
             tweet = next(iter(tweets), None).full_text
-            # tweet = public_tweets[0].text also works
-            # print('@' + target + ' \'s nieuwste tweet is: ' + text)
+            date = next(iter(tweets), None).created_at
+            # tweet = tweets[0].text also works
             say(readable_feed(tweet, username = text))
         else:
             # got_user_timeline unsuccessful
