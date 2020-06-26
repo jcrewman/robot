@@ -1,10 +1,10 @@
 #!/usr/bin/python
 
 '''
-USE AT YOUR OWN PERIL <3
-fill in your API keys before running the script
-written in Python3 by Judith van Stegeren, @jd7h
-modified by Jamy Li, @jamyjli
+API keys stored in dat.txt file after user authenticates for the first time
+(can manually edit this)
+written in Python3 by Jamy Li, @jamyjli based on original template
+by Judith van Stegeren, @jd7h
 audio.wav produced by M Meijer, A Sadananda Bhat, M. Dokter en C. Boersma
 '''
 
