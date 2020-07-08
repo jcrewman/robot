@@ -1,6 +1,6 @@
 # robot
 
-APIs, pacakges, programs used:
+APIs, packages, programs used:
 Uses tweepy for Twitter OAuth 1.0 and status object processing, speech processing (PyAudio) for ASR, gTTS and pydub for audio playback.
 
 Functions:
