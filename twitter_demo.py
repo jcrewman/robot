@@ -10,27 +10,31 @@ audio.wav produced by M Meijer, A Sadananda Bhat, M. Dokter en C. Boersma
 
 '''
 before running the script, do this:
-0. environment variables to store keys (do NOT place string of any key in any file on github)
-$ nano ~/.bash_profile
+0. environment variables to store developer keys (do NOT place string of any key in any file on github)
+0b. obtain API keys from twitter
+0c. fill them in the bash_profile above
+$ nano ~/.bash_profile  (for mac, or) ~/.bashrc (for Raspberry Pi)
 $ nano .gitignore (add dat.txt)
 1. create a virtual environment
 $ python -m venv venv
 $ source venv/bin/activate
 2. install the dependencies
 (venv)$ pip install python-twitter
-3. obtain API keys from twitter
-4. fill them in in the script below
-5. To re-run the virtual environment, do step 1b above
-6. Install ffmpeg program outside venv, it may install lots
-$ brew install ffmpeg
-7. Install portaudio program outside venv
-$ brew install portaudio
-7a. If there's a Permission denied @apply2files, check https://github.com/Homebrew/homebrew-core/issues/45009
-$ touch /usr/local/lib/node_modules/node-red/node_modules/@node-red/nodes/.DS_Store
-8. Install PyAudio python package required for speech_recognition
-(venv)$ pip install PyAudio
-8. test speech recognition within venv
+3. To re-run the virtual environment, do step 1b above
+4. test speech recognition within venv
 (venv)$ python3.8 -m speech_recognition
+5. Install dependencies, e.g.
+PyAudio python package required for speech_recognition
+(venv)$ pip install PyAudio
+6. Run: python twitter_demo.py (if fails, install dependency in step 5)
+
+not needed:
+4. Install ffmpeg program outside venv (use $ deactivate), it may install lots
+$ brew install ffmpeg
+5. Install portaudio program outside venv
+$ brew install portaudio
+5a. If there's a Permission denied @apply2files, check https://github.com/Homebrew/homebrew-core/issues/45009
+$ touch /usr/local/lib/node_modules/node-red/node_modules/@node-red/nodes/.DS_Store
 
 
 '''
@@ -76,39 +80,44 @@ class Session(object):
 
 def twitter_authenticate():
     global api
-    got_token = True
+    got_token = False
     
-    # authenticate with tweepy -> http://docs.tweepy.org/en/latest/auth_tutorial.html
-    consumer_key = os.environ.get('TW_CONSUMER_KEY')
-    consumer_secret = os.environ.get('TW_CONSUMER_SECRET')
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    while not got_token:
+        # authenticate with tweepy -> http://docs.tweepy.org/en/latest/auth_tutorial.html
+        consumer_key = os.environ.get('TW_CONSUMER_KEY')
+        consumer_secret = os.environ.get('TW_CONSUMER_SECRET')
+        auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
     
-    try:
-        redirect_url = auth.get_authorization_url()
-    except tweepy.TweepError:
-        print('Error! Failed to get request token.')
-        got_token = False
+        try:
+            redirect_url = auth.get_authorization_url()
+            print(redirect_url)
+        except tweepy.TweepError:
+            print('Error! Failed to get request token.')
+            # raise error.with_traceback(sys.exc_info()[2])
     
-    print(redirect_url)    
-    # manually go to the url, then input 8-digit code
-    verifier = input('Verifier:')    
+        # manually go to the url, then input 8-digit code
+        verifier = input('Verifier:')    
         
-    try:
-        auth.get_access_token(verifier)
-    except tweepy.TweepError:
-        print('Error! Failed to get access token.')
-        got_token = False
+        try:
+            auth.get_access_token(verifier)
+            got_token = True
+        except tweepy.TweepError:
+            print('Error! Failed to get access token.')
+            # raise error.with_traceback(sys.exc_info()[2])
 
-    # keep these in file as they never expire
-    if got_token == True:
-        access_token = auth.access_token
-        access_secret = auth.access_token_secret
-        with open("dat.txt", "w") as text_file:
-            print(f"access_token: {access_token}\naccess_secret: {access_secret}", file=text_file)
-    
-    # construct the API instance
-    api = tweepy.API(auth)
-    print(api)
+        # keep these in file as they never expire
+        if got_token == True:
+            access_token = auth.access_token
+            access_secret = auth.access_token_secret
+            with open("dat.txt", "w") as text_file:
+                print(f"access_token: {access_token}\naccess_secret: {access_secret}", file=text_file)
+            # construct the API instance
+            api = tweepy.API(auth)
+            print(api)
+
+        if got_token == False:
+            print('Please try again')
+            # raise ValueError('request or access token bad')
     
     '''
     # if using web app, need callback  -> http://docs.tweepy.org/en/latest/auth_tutorial.html
