@@ -50,9 +50,9 @@ import sys
 import speech_recognition as sr
 
 from gtts import gTTS
-from pydub import AudioSegment
-from pydub.playback import play
-import pyaudio
+#from pydub import AudioSegment
+#from pydub.playback import play
+#import pyaudio
 
 # global variables
 api = tweepy.API()
